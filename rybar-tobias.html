@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Rybář Tobiáš</title>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#12324a;--paper:#fff8e7;--sun:#ffc93c;--go:#3fae4b;--go2:#2c8a38;--warn:#e8502e;--water:#2f8fc4;--deep:#0d3f63}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--deep);color:var(--ink);
+  font-family:'Baloo 2','Trebuchet MS',system-ui,sans-serif;font-weight:500;
+  touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+canvas#scene{position:fixed;inset:0;width:100%;height:100%;display:block}
+button{font:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulation}
+.hide{display:none!important}
+
+/* ---------- HUD při lovu ---------- */
+#hud{position:fixed;left:0;right:0;top:0;padding:8px 10px;display:flex;gap:8px;align-items:center;pointer-events:none;z-index:5}
+#hud>*{pointer-events:auto}
+.chip{background:rgba(255,248,231,.94);border-radius:999px;padding:4px 12px;font-weight:700;font-size:17px;line-height:1.5;
+  box-shadow:0 3px 0 rgba(0,0,0,.18);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.chip.btn{min-width:46px;min-height:46px;justify-content:center;font-size:22px;padding:4px 10px}
+.chip .xp{width:54px;height:9px;border-radius:9px;background:#d9cfb4;overflow:hidden}
+.chip .xp i{display:block;height:100%;background:var(--go)}
+.sp{flex:1}
+#hint{position:fixed;left:50%;top:64px;transform:translateX(-50%);max-width:92vw;text-align:center;z-index:5;pointer-events:none;
+  background:rgba(18,50,74,.86);color:#fff;border-radius:16px;padding:6px 16px;font-size:clamp(17px,2.6vw,22px);font-weight:700;line-height:1.25}
+#hint.alert{background:var(--warn);animation:pulse .35s infinite alternate}
+#hint.good{background:var(--go2)}
+@keyframes pulse{to{transform:translateX(-50%) scale(1.07)}}
+#action{position:fixed;right:18px;bottom:18px;width:128px;height:128px;border-radius:50%;z-index:6;
+  background:radial-gradient(circle at 35% 30%,#6fd77a,var(--go) 60%,var(--go2));color:#fff;font-weight:800;font-size:22px;line-height:1.05;
+  box-shadow:0 7px 0 #1d6a29,0 12px 18px rgba(0,0,0,.35);border:4px solid #fff}
+#action.down{transform:translateY(5px);box-shadow:0 2px 0 #1d6a29,0 5px 10px rgba(0,0,0,.35)}
+#action.red{background:radial-gradient(circle at 35% 30%,#ff9a7a,var(--warn) 60%,#b6361b);box-shadow:0 7px 0 #8a2610,0 12px 18px rgba(0,0,0,.35);animation:bump .22s infinite alternate}
+#action.dim{background:#8fa3ad;box-shadow:0 7px 0 #5f727c;opacity:.75}
+@keyframes bump{to{transform:scale(1.1)}}
+#meters{position:fixed;left:16px;right:170px;bottom:22px;z-index:5;pointer-events:none;display:flex;flex-direction:column;gap:8px;max-width:560px}
+.mlabel{color:#fff;font-weight:700;font-size:15px;text-shadow:0 2px 3px rgba(0,0,0,.6);display:flex;justify-content:space-between}
+.bar{position:relative;height:26px;border-radius:14px;background:#12324a;border:3px solid #fff;overflow:hidden;box-shadow:0 3px 8px rgba(0,0,0,.4)}
+.bar .zone{position:absolute;top:0;bottom:0}
+.bar .mark{position:absolute;top:-3px;bottom:-3px;width:8px;margin-left:-4px;background:#fff;border-radius:4px;box-shadow:0 0 0 2px #12324a}
+#distbar{height:18px}
+#distbar .fill{position:absolute;left:0;top:0;bottom:0;background:var(--sun)}
+@media (max-aspect-ratio:1/1){
+  #action{right:auto;left:50%;margin-left:-70px;width:140px;height:140px;bottom:22px}
+  #meters{left:16px;right:16px;bottom:182px;max-width:none}
+}
+
+/* ---------- obrazovky ---------- */
+.screen{position:fixed;inset:0;z-index:10;display:none;flex-direction:column;align-items:center;overflow-y:auto;
+  background:linear-gradient(rgba(13,63,99,.72),rgba(13,63,99,.9));padding:14px 14px 28px;touch-action:pan-y}
+.screen.on{display:flex}
+.top{width:100%;max-width:760px;display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.top h2{margin:0;color:#fff;font-size:28px;font-weight:800;flex:1}
+.wrap{width:100%;max-width:760px}
+.big{display:flex;align-items:center;justify-content:center;gap:10px;min-height:58px;padding:8px 20px;border-radius:18px;font-weight:800;font-size:22px;
+  background:var(--paper);box-shadow:0 5px 0 rgba(0,0,0,.25)}
+.big:active{transform:translateY(3px);box-shadow:0 2px 0 rgba(0,0,0,.25)}
+.big.go{background:var(--go);color:#fff;box-shadow:0 5px 0 #1d6a29}
+.big.sun{background:var(--sun);box-shadow:0 5px 0 #b98a13}
+.big[disabled]{opacity:.5}
+h1.logo{margin:6px 0 0;font-size:clamp(52px,13vw,92px);line-height:1;font-weight:800;color:var(--sun);letter-spacing:2px;
+  text-shadow:0 5px 0 #b3541e,0 9px 14px rgba(0,0,0,.4)}
+.hello{color:#fff;font-size:21px;font-weight:700;margin:2px 0 10px;text-align:center}
+.menu{display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;max-width:560px}
+.menu .go{grid-column:1/-1;min-height:74px;font-size:28px}
+.status{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.card{background:var(--paper);border-radius:18px;padding:12px;box-shadow:0 5px 0 rgba(0,0,0,.25);display:flex;flex-direction:column;gap:4px}
+.card h3{margin:0;font-size:21px;font-weight:800;line-height:1.15}
+.card p{margin:0;font-size:16px;line-height:1.3}
+.card .ico{font-size:40px;line-height:1}
+.card.sel{outline:5px solid var(--sun)}
+.card.lock{opacity:.6}
+.card canvas{width:100%;height:auto;display:block}
+.card .big{min-height:46px;font-size:18px;margin-top:6px}
+.tabs{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.tabs button{flex:1;min-height:48px;border-radius:14px;background:rgba(255,248,231,.35);color:#fff;font-weight:800;font-size:18px;padding:4px 10px}
+.tabs button.on{background:var(--paper);color:var(--ink)}
+.sub{color:#fff;font-weight:800;font-size:20px;margin:14px 0 6px}
+.note{color:#dbeaf4;font-size:15px;line-height:1.35;margin:12px 0 0}
+.stat{font-weight:700;color:#2c6a8c}
+.prog{height:12px;border-radius:8px;background:#d9cfb4;overflow:hidden;margin-top:4px}
+.prog i{display:block;height:100%;background:var(--go)}
+input[type=text]{font:inherit;font-size:22px;font-weight:700;padding:8px 14px;border-radius:14px;border:3px solid var(--ink);width:100%;user-select:text;-webkit-user-select:text;touch-action:auto}
+
+/* ---------- dialog, karta úlovku, toast ---------- */
+#dlg{position:fixed;inset:0;z-index:30;display:none;align-items:center;justify-content:center;background:rgba(6,30,48,.72);padding:14px;overflow-y:auto;touch-action:pan-y}
+#dlg.on{display:flex}
+#dlg .box{background:var(--paper);border-radius:24px;padding:16px 18px;max-width:460px;width:100%;text-align:center;box-shadow:0 8px 0 rgba(0,0,0,.3);margin:auto}
+#dlg h2{margin:0 0 4px;font-size:30px;font-weight:800;line-height:1.1}
+#dlg p{margin:4px 0;font-size:18px;line-height:1.3}
+#dlg .row{display:flex;gap:10px;margin-top:12px}
+#dlg .row .big{flex:1;font-size:19px;padding:6px 10px}
+#dlg canvas{width:100%;max-width:340px;height:auto}
+.badge{display:inline-block;background:var(--warn);color:#fff;font-weight:800;border-radius:999px;padding:2px 14px;font-size:17px;margin:2px}
+.badge.gold{background:var(--sun);color:var(--ink)}
+.nums{display:flex;justify-content:center;gap:18px;font-size:26px;font-weight:800}
+.ava{border-radius:50%;object-fit:cover;border:4px solid #fff;box-shadow:0 4px 0 rgba(0,0,0,.25);background:#cfe6f2}
+.chip .ava{width:30px;height:30px;border-width:2px;box-shadow:none;margin:-2px 0 -2px -8px}
+.hero{display:flex;align-items:center;gap:14px;justify-content:center;margin:4px 0 6px}
+.hero .ava{width:clamp(84px,22vw,120px);height:clamp(84px,22vw,120px)}
+.subt{color:#fff;font-weight:800;font-size:clamp(17px,4vw,22px);margin:-2px 0 0}
+.photo{width:100%;border-radius:14px;display:block}
+#dlg img.photo{max-width:300px;margin:6px auto}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:40;background:var(--sun);color:var(--ink);font-weight:800;font-size:19px;
+  border-radius:18px;padding:8px 18px;box-shadow:0 5px 0 #b98a13;max-width:92vw;text-align:center;display:none}
+@media (max-height:480px){
+  #dlg .box{max-width:620px;padding:10px 16px}
+  #dlg h2{font-size:24px}
+  #dlg p{font-size:15px;margin:2px 0}
+  #dlg canvas{max-height:112px;width:auto}
+  #dlg img.photo{max-height:120px;width:auto}
+  h1.logo{font-size:52px}
+  .hero .ava{width:84px;height:84px}
+  .nums{font-size:21px}
+  #dlg .row{margin-top:6px}
+  #dlg .row .big{min-height:48px;font-size:17px;line-height:1.15}
+}
+#toast.on{display:block;animation:pop .25s}
+@keyframes pop{from{transform:translateX(-50%) scale(.6)}}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="fishui" class="hide">
+  <div id="hud">
+    <button class="chip btn" data-act="home" aria-label="Domů">🏠</button>
+    <button class="chip btn" data-act="prep" aria-label="Náčiní">🎒</button>
+    <span class="sp"></span>
+    <span class="chip">⭐ <span id="hudLvl">1</span><span class="xp"><i id="hudXp"></i></span></span>
+    <span class="chip">🪙 <span id="hudCoins">0</span></span>
+  </div>
+  <div id="hint"></div>
+  <div id="meters">
+    <div id="mCast" class="hide">
+      <div class="mlabel"><span>blízko</span><span>SÍLA NÁHOZU</span><span>daleko</span></div>
+      <div class="bar"><div class="zone" id="castZone" style="background:#3fae4b"></div><div class="mark" id="castMark"></div></div>
+    </div>
+    <div id="mFight" class="hide">
+      <div class="mlabel"><span>🐟 ryba</span><span>břeh 🎣</span></div>
+      <div class="bar" id="distbar"><div class="fill" id="distFill"></div></div>
+      <div class="mlabel"><span>volný</span><span>NAPĚTÍ VLASCE</span><span>praskne!</span></div>
+      <div class="bar">
+        <div class="zone" style="left:0;width:8%;background:#5aa7d6"></div>
+        <div class="zone" style="left:8%;width:70%;background:#3fae4b"></div>
+        <div class="zone" style="left:78%;width:12%;background:#ffc93c"></div>
+        <div class="zone" style="left:90%;width:10%;background:#e8502e"></div>
+        <div class="mark" id="tMark"></div>
+      </div>
+    </div>
+  </div>
+  <button id="action">NAHOĎ</button>
+</div>
+
+<div class="screen" id="scr"></div>
+<div id="dlg"><div class="box" id="dlgBox"></div></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* =====================================================================
+   DATA – ryby, revíry, metody, nástrahy, vybavení, výzvy
+   ===================================================================== */
+const SPEC = {
+  perlin:{n:'Perlín ostrobřichý', s:'perlín', min:10,max:35, k:1.6e-5, str:.4, xp:12, coin:10, warn:.6, lmin:.5,lmax:.9, imin:3.5,imax:6, photo:1,
+    info:'Zlatavá ryba s krásně červenými ploutvemi a žlutým okem. Drží se u hladiny blízko rákosí.'},
+  plotice:{n:'Plotice obecná', s:'plotice', min:10,max:35, k:1.3e-5, str:.35, xp:10, coin:8,  warn:.6, lmin:.5,lmax:.9, imin:3.5,imax:6,
+    info:'Stříbrná rybka s červenýma očima a ploutvemi. Žije v hejnech a je to častý první úlovek malých rybářů.'},
+  karas:{n:'Karas stříbřitý', s:'karas', min:12,max:40, k:2.0e-5, str:.45, xp:12, coin:10, warn:.6, lmin:.5,lmax:.9, imin:3.5,imax:6,
+    info:'Vypadá jako malý kapr, ale nemá vousky. Je hodně odolný a vydrží i ve vodě s málem kyslíku.'},
+  cejn:{n:'Cejn velký', s:'cejn', min:20,max:65, k:1.3e-5, str:.55, xp:15, coin:14, warn:.6, lmin:.6,lmax:1.0, imin:3.5,imax:5.5,
+    info:'Vysoká a plochá ryba, rybáři jí říkají „lopata“. Potravu hledá u dna a má hodně slizu.'},
+  lin:{n:'Lín obecný', s:'lín', min:20,max:55, k:1.7e-5, str:.7, xp:20, coin:18, warn:.65, lmin:.8,lmax:1.3, imin:3,imax:5,
+    info:'Olivově zelená ryba s drobnými šupinami a červeným okem. Má rád zarostlé a bahnité rybníky.'},
+  kapr:{n:'Kapr obecný', s:'kapr', min:30,max:90, k:2.0e-5, str:1.0, xp:25, coin:28, warn:.7, lmin:1.4,lmax:2.2, imin:3,imax:5,
+    info:'Nejznámější česká ryba. Má čtyři vousky, kterými hledá potravu u dna. Bojuje dlouhými silnými výpady.'},
+  okoun:{n:'Okoun říční', s:'okoun', min:10,max:45, k:1.5e-5, str:.55, xp:15, coin:14, warn:.5, lmin:.5,lmax:.9, imin:2.5,imax:4.5,
+    info:'Pruhovaný dravec s ostnatou hřbetní ploutví – pozor na prsty! Menší okouni loví v hejnech.'},
+  tloust:{n:'Jelec tloušť', s:'tloušť', min:20,max:60, k:1.2e-5, str:.7, xp:18, coin:16, warn:.55, lmin:.7,lmax:1.2, imin:2.5,imax:4.5,
+    info:'Opatrná říční ryba, která sní skoro všechno – chleba, hmyz i malé rybky. Snadno se vyplaší.'},
+  stika:{n:'Štika obecná', s:'štika', min:40,max:110, k:7.5e-6, str:1.15, xp:35, coin:40, warn:.45, lmin:.7,lmax:1.1, imin:1.8,imax:3,
+    info:'Dravec s tlamou plnou ostrých zubů. Číhá schovaná u rákosí a na kořist bleskově vyrazí.'}
+};
+const ORDER = ['plotice','perlin','karas','cejn','lin','kapr','okoun','tloust','stika'];
+const LOOK = {
+  perlin:{h:.34,body:'#b3a257',belly:'#f6f1d6',fin:'#e03a26',eye:'#f2c230'},
+  kapr:{h:.36,body:'#b98a2e',belly:'#f3dc92',fin:'#8a5a1c',scales:1,barbel:1},
+  karas:{h:.42,body:'#b3a04a',belly:'#f0e4a6',fin:'#857330'},
+  plotice:{h:.30,body:'#93a9ba',belly:'#f2f6f8',fin:'#e0512f',eye:'#e0512f'},
+  lin:{h:.35,body:'#56692f',belly:'#bdbb62',fin:'#39461f',eye:'#d2452c'},
+  cejn:{h:.47,body:'#87949d',belly:'#e6e9eb',fin:'#515c66'},
+  okoun:{h:.34,body:'#78963a',belly:'#f0f1d2',fin:'#e2482d',stripes:1,spiky:1},
+  stika:{h:.19,body:'#5d7c38',belly:'#eaeecb',fin:'#a8602c',spots:1,snout:1,backfin:1},
+  tloust:{h:.25,body:'#7f8a7e',belly:'#eef0e8',fin:'#d2603a'}
+};
+const REVIR = {
+  rybnik:{n:'Vrbový rybník', ico:'🌿', lvl:1, methods:['splavek','polozena'],
+    txt:'Klidná voda s rákosím. Kapři, karasi, plotice, perlíni, líni a cejni.',
+    fish:{kapr:30,karas:25,plotice:26,perlin:20,lin:12,cejn:15}},
+  reka:{n:'Řeka Olšinka', ico:'🏞️', lvl:3, methods:['privlac','splavek'],
+    txt:'Proudící voda plná dravců. Okouni, tloušti a štiky!',
+    fish:{okoun:35,stika:22,tloust:30,plotice:15}}
+};
+const METHOD = {
+  splavek:{n:'Splávek', ico:'🎈', lvl:1, baits:['chleb','zizala','kukurice','cervi'], txt:'Sleduj splávek. Když zmizí pod vodou, zasekni!',
+    mod:{}},
+  polozena:{n:'Položená', ico:'🔔', lvl:2, baits:['kukurice','zizala','boilie'], txt:'Nástraha leží na dně. Záběr ohlásí signalizátor. Na velké kapry!',
+    mod:{kapr:2,lin:1.5,cejn:1.5,plotice:.3,perlin:.2,karas:.7}},
+  privlac:{n:'Přívlač', ico:'✨', lvl:3, baits:['trpytka','wobler','ripper'], txt:'Nahoď a veď třpytivou nástrahu k sobě. Dravec zaútočí!',
+    mod:{}}
+};
+const BAIT = {
+  chleb:{n:'Chléb', ico:'🍞', price:0, aff:{plotice:3,perlin:3,karas:2,cejn:1,tloust:3,kapr:1}},
+  zizala:{n:'Žížala', ico:'🪱', price:40, aff:{lin:3,okoun:3,cejn:2,karas:2,plotice:1,perlin:1,kapr:1,tloust:1}},
+  kukurice:{n:'Kukuřice', ico:'🌽', price:60, aff:{kapr:3,karas:2,lin:2,cejn:2,plotice:1,perlin:1}},
+  cervi:{n:'Bílí červi', ico:'🐛', price:80, aff:{plotice:3,cejn:3,perlin:2,okoun:2,karas:1,tloust:1}},
+  boilie:{n:'Boilie', ico:'🟤', price:200, big:.15, aff:{kapr:3,lin:.3}},
+  trpytka:{n:'Třpytka', ico:'🥄', price:90, aff:{okoun:3,stika:2,tloust:1}},
+  wobler:{n:'Wobler', ico:'🐠', price:220, aff:{stika:2,tloust:3,okoun:1}},
+  ripper:{n:'Gumová rybka', ico:'🐟', price:300, big:.1, aff:{stika:3,okoun:2}}
+};
+const BAITS = Object.keys(BAIT);
+const RODS = [
+  {n:'Tobiášův prut', price:0, pow:1.0},
+  {n:'Dětský teleskop', price:120, pow:1.25},
+  {n:'Laminátový prut', price:350, pow:1.55},
+  {n:'Kaprový prut', price:800, pow:1.9},
+  {n:'Karbonový prut', price:1500, pow:2.3},
+  {n:'Trofejní prut', price:2800, pow:2.8}
+];
+const REELS = [
+  {n:'Základní naviják', price:0, sp:1.0},
+  {n:'Rychlý naviják', price:250, sp:1.3},
+  {n:'Profi naviják', price:900, sp:1.65}
+];
+const LINES = [
+  {n:'Tenký vlasec', price:0, tol:.9},
+  {n:'Pevný vlasec', price:180, tol:1.3},
+  {n:'Pletená šňůra', price:700, tol:1.8}
+];
+const XP = [0,50,130,260,440,680,1000,1400,1900,2500];
+const TITLES = ['','Začátečník','Učeň','Rybář','Šikovný rybář','Lovec kaprů','Znalec vod','Mistr prutu','Lovec trofejí','Rybářský mistr','Legenda revíru'];
+const TASKS = [
+  {id:'t1', txt:'Ulov svou první rybu', goal:1, val:s=>s.stats.total, coins:20, xp:10},
+  {id:'t2', txt:'Ulov 3 kapry', goal:3, val:s=>cnt(s,'kapr'), coins:60, xp:20},
+  {id:'t3', txt:'Objev 3 druhy ryb', goal:3, val:s=>species(s), coins:50, xp:20},
+  {id:'t4', txt:'Ulov rybu dlouhou aspoň 40 cm', goal:40, val:s=>Math.floor(maxLen(s)), unit:' cm', coins:50, xp:20},
+  {id:'t5', txt:'Pusť 5 ryb zpátky do vody', goal:5, val:s=>s.stats.released, coins:60, xp:25},
+  {id:'t6', txt:'Ulov 3 ryby na položenou', goal:3, val:s=>s.stats.by.polozena||0, coins:80, xp:25},
+  {id:'t7', txt:'Ulov 3 okouny', goal:3, val:s=>cnt(s,'okoun'), coins:80, xp:25},
+  {id:'t8', txt:'Ulov svou první štiku', goal:1, val:s=>cnt(s,'stika'), coins:120, xp:40},
+  {id:'t9', txt:'Ulov kapra těžšího než 5 kg', goal:5, val:s=>Math.floor(((s.diary.kapr||{}).maxW||0)*10)/10, unit:' kg', coins:200, xp:50},
+  {id:'t10', txt:'Ulov celkem 25 ryb', goal:25, val:s=>s.stats.total, coins:150, xp:50},
+  {id:'t11', txt:'Objev všech 9 druhů ryb', goal:9, val:s=>species(s), coins:300, xp:80}
+];
+const cnt=(s,id)=>(s.diary[id]||{}).n||0;
+const species=s=>ORDER.filter(id=>cnt(s,id)>0).length;
+const maxLen=s=>ORDER.reduce((m,id)=>Math.max(m,(s.diary[id]||{}).maxL||0),0);
+
+/* =====================================================================
+   POMOCNÉ FUNKCE
+   ===================================================================== */
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const lerp=(a,b,t)=>a+(b-a)*t;
+const rand=(a,b)=>a+Math.random()*(b-a);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num=(v,d)=>v.toFixed(d).replace('.',',');
+const isTobi=()=>/^tobi[aá][sš]$/i.test(save.name);
+const voc=()=>isTobi()?'Tobiáši':(save.name||'rybáři');
+const hash=i=>{const x=Math.sin(i*127.1+311.7)*43758.5453;return x-Math.floor(x)};
+
+/* =====================================================================
+   ULOŽENÁ DATA (s ochranou proti poškození)
+   ===================================================================== */
+const KEY='rybar_save_v1';
+function freshSave(){return {v:1,name:'Tobiáš',music:true,seen:false,xp:0,coins:0,
+  rods:[0],reels:[0],lines:[0],baits:['chleb'],rod:0,reel:0,line:0,
+  revir:'rybnik',method:'splavek',bait:'chleb',
+  diary:{},stats:{total:0,released:0,by:{}},done:[],sound:true,vib:true}}
+function loadSave(){
+  const s=freshSave();
+  try{
+    const raw=localStorage.getItem(KEY); if(!raw) return s;
+    const d=JSON.parse(raw); if(!d||typeof d!=='object') return s;
+    if(typeof d.name==='string'&&d.name.trim()) s.name=d.name.trim().slice(0,16);
+    s.music=d.music!==false; s.seen=d.seen===true||!!(d.stats&&d.stats.total>0);
+    if(Number.isFinite(d.xp)&&d.xp>=0) s.xp=Math.floor(d.xp);
+    if(Number.isFinite(d.coins)&&d.coins>=0) s.coins=Math.floor(d.coins);
+    const idx=(a,max)=>Array.isArray(a)?[...new Set([0,...a.filter(i=>Number.isInteger(i)&&i>=0&&i<max)])]:[0];
+    s.rods=idx(d.rods,RODS.length); s.reels=idx(d.reels,REELS.length); s.lines=idx(d.lines,LINES.length);
+    if(Array.isArray(d.baits)) s.baits=[...new Set(['chleb',...d.baits.filter(b=>BAIT[b])])];
+    if(s.rods.includes(d.rod)) s.rod=d.rod; if(s.reels.includes(d.reel)) s.reel=d.reel; if(s.lines.includes(d.line)) s.line=d.line;
+    if(REVIR[d.revir]) s.revir=d.revir; if(METHOD[d.method]) s.method=d.method; if(BAIT[d.bait]) s.bait=d.bait;
+    if(d.diary&&typeof d.diary==='object') for(const id of ORDER){const e=d.diary[id];
+      if(e&&Number.isFinite(e.n)&&e.n>0) s.diary[id]={n:Math.floor(e.n),maxL:+e.maxL||0,maxW:+e.maxW||0};}
+    if(d.stats&&typeof d.stats==='object'){
+      if(Number.isFinite(d.stats.total)) s.stats.total=Math.max(0,Math.floor(d.stats.total));
+      if(Number.isFinite(d.stats.released)) s.stats.released=Math.max(0,Math.floor(d.stats.released));
+      if(d.stats.by&&typeof d.stats.by==='object') for(const m in METHOD) if(Number.isFinite(d.stats.by[m])) s.stats.by[m]=Math.floor(d.stats.by[m]);
+    }
+    if(Array.isArray(d.done)) s.done=d.done.filter(id=>TASKS.some(t=>t.id===id));
+    s.sound=d.sound!==false; s.vib=d.vib!==false;
+  }catch(e){}
+  return s;
+}
+let save=loadSave();
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(save))}catch(e){}}
+const levelOf=xp=>{let l=1;for(let i=1;i<XP.length;i++) if(xp>=XP[i]) l=i+1;return l};
+const level=()=>levelOf(save.xp);
+function xpFrac(){const l=level(); if(l>=XP.length) return 1; return (save.xp-XP[l-1])/(XP[l]-XP[l-1]);}
+
+/* =====================================================================
+   ZVUK A VIBRACE
+   ===================================================================== */
+let AC=null, mGain=null, mNext=0, mStep=0;
+function audio(){
+  try{
+    if(!AC){ AC=new (window.AudioContext||window.webkitAudioContext)(); mGain=AC.createGain(); mGain.gain.value=.05; mGain.connect(AC.destination); }
+    if(AC.state==='suspended') AC.resume();
+    return AC;
+  }catch(e){return null}
+}
+/* jemná podkladová hudba: pomalé rozložené akordy C – Am – F – G */
+const CH=[[261.63,329.63,392,523.25],[220,261.63,329.63,440],[174.61,220,261.63,349.23],[196,246.94,293.66,392]];
+const PAT=[0,2,1,2,3,2,1,2];
+function mNote(f,t,d,v,type){
+  const o=AC.createOscillator(), gn=AC.createGain(); o.type=type||'triangle'; o.frequency.value=f;
+  gn.gain.setValueAtTime(.0001,t); gn.gain.linearRampToValueAtTime(v,t+.03); gn.gain.exponentialRampToValueAtTime(.0001,t+d);
+  o.connect(gn); gn.connect(mGain); o.start(t); o.stop(t+d+.05);
+}
+function musicTick(){
+  if(!save.music||document.hidden||!AC||AC.state!=='running') return;
+  try{
+    if(mNext<AC.currentTime+.05) mNext=AC.currentTime+.08;
+    while(mNext<AC.currentTime+.6){
+      const i=mStep%8, ch=CH[Math.floor(mStep/8)%4], verse=Math.floor(mStep/32)%2;
+      if(i===0){ mNote(ch[0]/2,mNext,2.9,.9,'sine'); mNote(ch[1]/2*2,mNext,2.6,.25,'sine'); }
+      if(!(verse&&i%2&&i!==7)) mNote(ch[PAT[i]]*(verse&&i===4?2:1),mNext,1.1,.55);
+      mStep++; mNext+=.36;
+    }
+  }catch(e){}
+}
+setInterval(musicTick,150);
+function tone(f,d,type,vol,to,delay){
+  if(!save.sound) return;
+  try{
+    if(!audio()) return;
+    const t=AC.currentTime+(delay||0), o=AC.createOscillator(), g=AC.createGain();
+    o.type=type||'sine'; o.frequency.setValueAtTime(f,t); if(to) o.frequency.exponentialRampToValueAtTime(to,t+d);
+    g.gain.setValueAtTime(vol||.12,t); g.gain.exponentialRampToValueAtTime(.001,t+d);
+    o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+d+.02);
+  }catch(e){}
+}
+const SND={
+  cast:()=>tone(700,.3,'triangle',.1,180), splash:()=>{tone(260,.18,'sine',.14,70);tone(900,.08,'triangle',.05,300)},
+  nibble:()=>tone(880,.07,'square',.05), bite:()=>{tone(1200,.09,'square',.09);tone(1200,.09,'square',.09,0,.13);tone(1500,.12,'square',.09,0,.26)},
+  hook:()=>tone(330,.15,'sawtooth',.1,660), tick:()=>tone(1500,.02,'square',.025), warn:()=>tone(520,.18,'sawtooth',.09,260),
+  snap:()=>tone(900,.3,'sawtooth',.14,60), lose:()=>tone(300,.4,'triangle',.1,120),
+  win:()=>[523,659,784,1047].forEach((f,i)=>tone(f,.18,'triangle',.12,0,i*.11)), coin:()=>{tone(1319,.08,'square',.06);tone(1760,.16,'square',.06,0,.08)},
+  click:()=>tone(600,.05,'triangle',.07)
+};
+function vib(p){ if(!save.vib) return; try{ if(navigator.vibrate) navigator.vibrate(p) }catch(e){} }
+
+/* =====================================================================
+   STAV LOVU
+   ===================================================================== */
+const F={active:false,phase:'idle',t:0,power:0,hot:.6,castD:.6,q:0,fish:null,biteAt:0,nibbles:[],nib:0,
+  lure:1,attackAt:null,T:0,dist:100,lunge:null,nextLunge:2,breakT:0,slackT:0,fightT:0,hold:false,msg:'',msgGood:false,early:0,tickT:0};
+const parts=[]; // kapky
+let W=0,H=0,DPR=1,clock=0;
+const cv=$('scene'), g=cv.getContext('2d');
+
+function newSpot(){F.hot=rand(.4,.9)}
+function enterFishing(){
+  F.active=true; F.phase='idle'; F.t=0; F.fish=null; F.hold=false; F.msg=''; newSpot();
+  hideScreen(); $('fishui').classList.remove('hide'); updateHud();
+}
+function leaveFishing(){F.active=false; F.hold=false; $('fishui').classList.add('hide')}
+
+function pickFish(){
+  const rv=REVIR[save.revir], m=METHOD[save.method], b=BAIT[save.bait];
+  let tot=0; const list=[];
+  for(const id in rv.fish){ const w=rv.fish[id]*(b.aff[id]||0)*(m.mod[id]==null?1:m.mod[id]); if(w>0){list.push([id,w]);tot+=w} }
+  if(!list.length){ for(const id in rv.fish){list.push([id,rv.fish[id]]);tot+=rv.fish[id]} }
+  let r=Math.random()*tot, id=list[0][0];
+  for(const [i,w] of list){ if((r-=w)<=0){id=i;break} }
+  const sp=SPEC[id];
+  // velikost: většinou menší kusy, dobrý nához a lepší nástraha přidají; lepší prut dovolí větší ryby
+  let t=Math.pow(Math.random(),2.1)+F.q*.15+(b.big||0)+(save.method==='polozena'?.08:0);
+  const cap=.45+.11*save.rod;
+  t=clamp(t,0,cap);
+  const L=sp.min+(sp.max-sp.min)*t;
+  const Wt=sp.k*Math.pow(L,3);
+  const r_=sp.str*(.5+.9*t)/RODS[save.rod].pow;
+  return {id,t,L:Math.round(L*10)/10,W:Math.round(Wt*100)/100,r:r_};
+}
+
+function press(){
+  if(!F.active) return;
+  F.hold=true; $('action').classList.add('down');
+  switch(F.phase){
+    case 'idle': F.phase='charge'; F.t=0; F.power=0; break;
+    case 'wait': // moc brzo
+      F.early++; F.biteAt=F.t+rand(1.6,3); F.nibbles=[]; F.nib=0;
+      flash(save.method==='splavek'?'Moc brzo! Počkej, až splávek zmizí pod vodou.':'Moc brzo! Počkej, až signalizátor začne pípat bez přestání.',1.8);
+      SND.click(); break;
+    case 'bite': SND.hook(); vib(40); startFight(); break;
+  }
+}
+function release(){
+  F.hold=false; $('action').classList.remove('down');
+  if(F.active&&F.phase==='charge') doCast();
+}
+function doCast(){
+  F.castD=clamp(F.power,.12,1);
+  F.q=clamp(1-Math.abs(F.castD-F.hot)/.35,0,1);
+  F.phase='fly'; F.t=0; SND.cast();
+}
+function land(){
+  const p=posAt(F.castD); splash(p.x,p.y,10*p.s); SND.splash();
+  F.fish=pickFish(); F.early=0;
+  if(F.q>.8) flash(`Paráda, ${voc()}! Přesně k rybám!`,1.2,true);
+  if(save.method==='privlac'){
+    F.phase='retrieve'; F.t=0; F.lure=1;
+    F.attackAt=Math.random()<(.6+.35*F.q)?rand(.2,.8):null;
+  }else{
+    F.phase='wait'; F.t=0;
+    F.biteAt=lerp(5.5,2.2,F.q)*rand(.75,1.2);
+    F.nibbles=[]; const n=Math.random()<.6?1:(Math.random()<.5?2:0);
+    for(let i=0;i<n;i++) F.nibbles.push(rand(.8,Math.max(1,F.biteAt-.9)));
+    F.nibbles.sort((a,b)=>a-b); F.nib=0;
+  }
+}
+function biteNow(){
+  F.phase='bite'; F.t=0; SND.bite(); vib([60,40,60]);
+  const p=posAt(F.castD*(save.method==='privlac'?F.lure:1)); splash(p.x,p.y,8*p.s);
+}
+function startFight(){
+  F.phase='fight'; F.T=45; F.dist=100; F.breakT=0; F.slackT=0; F.lunge=null; F.nextLunge=rand(1.6,2.6); F.fightT=0; F.msg='';
+  if(save.method==='privlac') F.castD=Math.max(.15,F.castD*F.lure);
+}
+function fail(msg,snd){
+  F.phase='fail'; F.t=0; F.msg=msg; F.msgGood=false; F.fish=null; F.lunge=null; (snd||SND.lose)();
+}
+let flashT=0;
+function flash(msg,dur,good){F.msg=msg;F.msgGood=!!good;flashT=dur}
+
+function update(dt){
+  clock+=dt;
+  for(let i=parts.length-1;i>=0;i--){const p=parts[i];p.l-=dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=500*dt;if(p.l<=0)parts.splice(i,1)}
+  if(!F.active) return;
+  if(flashT>0){flashT-=dt; if(flashT<=0&&F.phase!=='fail') F.msg='';}
+  F.t+=dt;
+  switch(F.phase){
+    case 'charge':{ const c=(F.t/1.15)%2; F.power=c<1?c:2-c; break }
+    case 'fly': if(F.t>=.7) land(); break;
+    case 'wait':
+      if(F.nib<F.nibbles.length&&F.t>=F.nibbles[F.nib]){F.nib++; F.nibT=clock; SND.nibble()}
+      if(F.t>=F.biteAt) biteNow();
+      break;
+    case 'retrieve':
+      if(F.hold){ F.lure-=.2*dt; F.tickT-=dt; if(F.tickT<=0){SND.tick();F.tickT=.12} }
+      if(F.attackAt!=null&&F.lure<=F.attackAt) biteNow();
+      else if(F.lure<=.06){ F.phase='fail'; F.t=.5; F.msg='Tentokrát nic. Nahoď znovu!'; F.fish=null; }
+      break;
+    case 'bite':{
+      const win=save.method==='privlac'?1.4:save.method==='polozena'?2.2:1.9;
+      if(F.t>win) fail('Ryba utekla. Nevadí, nahoď znovu!');
+      break }
+    case 'fight': fight(dt); break;
+    case 'fail': if(F.t>1.9){F.phase='idle';F.msg='';newSpot()} break;
+  }
+}
+function fight(dt){
+  const f=F.fish, sp=SPEC[f.id], r=f.r;
+  F.fightT+=dt;
+  if(!F.lunge){
+    F.nextLunge-=dt;
+    if(F.nextLunge<=0&&F.dist>10){F.lunge={st:'warn',t:0,dur:rand(sp.lmin,sp.lmax)}; SND.warn(); vib(30)}
+  }else{
+    F.lunge.t+=dt;
+    if(F.lunge.st==='warn'&&F.lunge.t>=sp.warn){F.lunge.st='pull';F.lunge.t=0}
+    else if(F.lunge.st==='pull'&&F.lunge.t>=F.lunge.dur){F.lunge=null;F.nextLunge=rand(sp.imin,sp.imax)*(1+F.fightT/45)}
+  }
+  const pull=F.lunge&&F.lunge.st==='pull';
+  if(pull&&Math.random()<dt*14){const p=fishPos();splash(p.x,p.y,5*p.s)}
+  if(F.hold){
+    F.T+=(pull?85*(.7+.5*r):24*(.6+.6*r))*dt;
+    if(!pull){ F.dist-=16*REELS[save.reel].sp*clamp(F.T/25,.3,1)/(.75+.75*r)*dt; F.tickT-=dt; if(F.tickT<=0){SND.tick();F.tickT=.09} }
+  }else{
+    if(pull){ F.T+=(55-F.T)*3*dt; F.dist+=5*r*dt }
+    else { F.T-=40*dt; F.dist+=1.2*dt }
+  }
+  F.T=clamp(F.T,0,r<.4?88:100); F.dist=Math.min(F.dist,100);
+  if(F.T>=100){F.breakT+=dt; if(F.breakT>=LINES[save.line].tol){vib(200);return fail('Prásk! Vlasec se přetrhl. Příště dřív pusť!',SND.snap)}}
+  else F.breakT=Math.max(0,F.breakT-dt*.5);
+  if(F.T<=6){F.slackT+=dt; if(F.slackT>=3) return fail('Ryba se vyhákla. Příště víc navíjej!')}
+  else F.slackT=Math.max(0,F.slackT-dt);
+  if(F.dist<=0) landed();
+}
+
+/* =====================================================================
+   ÚLOVEK, ODMĚNY, ÚROVNĚ, VÝZVY
+   ===================================================================== */
+function landed(){
+  F.phase='card'; F.hold=false; $('action').classList.remove('down'); SND.win(); vib([40,30,80]);
+  const f=F.fish, sp=SPEC[f.id], d=save.diary[f.id];
+  const isNew=!d, rec=d&&f.L>d.maxL;
+  const small=f.t<.18;
+  const xp=Math.round(sp.xp*(.6+1.2*f.t))+(isNew?15:0), coins=Math.round(sp.coin*(.6+1.6*f.t));
+  showDialog(`
+    ${isNew?'<span class="badge">NOVÝ DRUH!</span>':''}${rec?'<span class="badge gold">NOVÝ REKORD!</span>':''}
+    <p><b>${esc(voc())}, máš ji!</b></p>
+    <h2>${sp.n}</h2>
+    <canvas id="cardFish" width="600" height="250"></canvas>
+    <div class="nums"><span>📏 ${num(f.L,1)} cm</span><span>⚖️ ${num(f.W,2)} kg</span></div>
+    <p>${sp.info}</p>
+    ${sp.photo&&isTobi()?'<p><b>Takovou už jsi chytil i doopravdy!</b></p>':''}
+    ${small?'<p><b>Je ještě malá. Pustíme ji, ať vyroste!</b></p>':''}
+    <div class="row">
+      <button class="big go" data-act="release">💧 Pustit<br>+${Math.round(xp*1.5)} ⭐ +${Math.round(coins*.5)} 🪙</button>
+      ${small?'':`<button class="big sun" data-act="keep">🧺 Vzít si<br>+${xp} ⭐ +${coins} 🪙</button>`}
+    </div>`);
+  const c=$('cardFish'); drawFish(c.getContext('2d'),f.id,300,125,lerp(330,540,f.t));
+  F.reward={xp,coins};
+}
+function finishCatch(released){
+  const f=F.fish, rw=F.reward; if(!f||!rw) return;
+  const before=level();
+  const d=save.diary[f.id]||(save.diary[f.id]={n:0,maxL:0,maxW:0});
+  d.n++; d.maxL=Math.max(d.maxL,f.L); d.maxW=Math.max(d.maxW,f.W);
+  save.stats.total++; save.stats.by[save.method]=(save.stats.by[save.method]||0)+1;
+  if(released) save.stats.released++;
+  save.xp+=Math.round(rw.xp*(released?1.5:1)); save.coins+=Math.round(rw.coins*(released?.5:1));
+  F.fish=null; F.reward=null; SND.coin();
+  const notes=checkTasks();
+  const after=level(); const ups=[];
+  for(let l=before+1;l<=after;l++) ups.push(levelUp(l));
+  persist(); updateHud(); closeDialog();
+  F.phase='idle'; F.t=0; F.msg=''; newSpot();
+  if(released) flash('Ryba odplavala. Hezky jsi ji pustil!',1.6,true);
+  if(ups.length){
+    SND.win();
+    showDialog(`<h2>⭐ Úroveň ${after}!</h2><p>${esc(voc())}, teď jsi <b>${TITLES[after]}</b>!</p>${ups.filter(Boolean).map(u=>`<p>${u}</p>`).join('')}
+      <div class="row"><button class="big go" data-act="dlgok">Super!</button></div>`);
+  }
+  notes.forEach((n,i)=>setTimeout(()=>toast(n),400+i*2600));
+}
+function levelUp(l){
+  if(l===2){ if(!save.baits.includes('kukurice')) save.baits.push('kukurice'); return '🔔 Nová metoda: <b>Položená</b>. Dárek: 🌽 kukuřice!' }
+  if(l===3){ if(!save.baits.includes('trpytka')) save.baits.push('trpytka'); return '🏞️ Nový revír: <b>Řeka Olšinka</b>. Nová metoda: <b>Přívlač</b>. Dárek: 🥄 třpytka. Hurá na štiky!' }
+  save.coins+=l*20; return `Dárek k úrovni: ${l*20} 🪙`;
+}
+function checkTasks(){
+  const out=[]; let again=true;
+  while(again){ again=false;
+    for(const t of TASKS){ if(save.done.includes(t.id)) continue;
+      if(t.val(save)>=t.goal){ save.done.push(t.id); save.coins+=t.coins; save.xp+=t.xp; out.push(`🏆 Výzva splněna: ${t.txt}  +${t.coins} 🪙`); again=true } } }
+  return out;
+}
+
+/* =====================================================================
+   KRESLENÍ SCÉNY
+   ===================================================================== */
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2); W=window.innerWidth; H=window.innerHeight;
+  cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR);
+}
+const horizon=()=>H*.40;
+function posAt(d){
+  const yN=H*.83, yF=horizon()+H*.05, k=Math.pow(clamp(d,0,1),.75);
+  return {x:W*(.47-.05*k), y:lerp(yN,yF,k), s:lerp(1.25,.42,k)*Math.min(W,H)/420};
+}
+function fishPos(){
+  const d=F.castD*F.dist/100, p=posAt(d);
+  const sway=Math.sin(clock*2.3)*W*.07*(F.lunge&&F.lunge.st==='pull'?1.8:1)*(.3+.7*F.dist/100);
+  return {x:p.x+sway,y:p.y,s:p.s};
+}
+function splash(x,y,n){
+  for(let i=0;i<n;i++) parts.push({x,y,vx:rand(-90,90),vy:rand(-260,-90),l:rand(.3,.6)});
+}
+function drawScene(){
+  g.setTransform(DPR,0,0,DPR,0,0);
+  const river=save.revir==='reka', hz=horizon(), u=Math.min(W,H)/420;
+  // obloha
+  let gr=g.createLinearGradient(0,0,0,hz);
+  gr.addColorStop(0,river?'#5fb4e8':'#6cc3f2'); gr.addColorStop(1,river?'#d8eef6':'#e6f6ee');
+  g.fillStyle=gr; g.fillRect(0,0,W,hz+2);
+  g.fillStyle='#ffe07a'; g.beginPath(); g.arc(W*.16,hz*.3,26*u,0,7); g.fill();
+  g.fillStyle='rgba(255,224,122,.3)'; g.beginPath(); g.arc(W*.16,hz*.3,40*u,0,7); g.fill();
+  g.fillStyle='#fff';
+  for(let i=0;i<4;i++){ const cx=((hash(i)*W*1.4+clock*(6+i*2))%(W*1.4))-W*.2, cy=hz*(.18+.5*hash(i+9)), s=u*(22+hash(i+3)*18);
+    g.beginPath(); g.ellipse(cx,cy,s*1.6,s*.6,0,0,7); g.ellipse(cx-s*.8,cy+s*.15,s,s*.45,0,0,7); g.ellipse(cx+s*.9,cy+s*.1,s*1.1,s*.5,0,0,7); g.fill(); }
+  // protější břeh
+  g.fillStyle=river?'#5c9a4a':'#6aa857'; g.beginPath(); g.moveTo(0,hz);
+  for(let x=0;x<=W;x+=20) g.lineTo(x,hz-H*.07-Math.sin(x*.006+1)*H*.03-Math.sin(x*.017)*H*.012);
+  g.lineTo(W,hz); g.fill();
+  const nt=Math.ceil(W/(34*u));
+  for(let i=0;i<nt;i++){ const x=(i+.5)*W/nt+(hash(i+20)-.5)*18*u, r=(13+hash(i+40)*12)*u;
+    g.fillStyle=hash(i+60)>.5?'#2f7d3a':'#3b8f45';
+    if(river&&hash(i+80)>.6){ g.beginPath(); g.moveTo(x,hz-r*3.2); g.lineTo(x-r*.8,hz); g.lineTo(x+r*.8,hz); g.fill(); }
+    else { g.beginPath(); g.arc(x,hz-r*.8,r,0,7); g.fill(); } }
+  // voda
+  gr=g.createLinearGradient(0,hz,0,H);
+  if(river){gr.addColorStop(0,'#7fc4dc');gr.addColorStop(.5,'#3a93b9');gr.addColorStop(1,'#1f6e94')}
+  else{gr.addColorStop(0,'#8fd0d2');gr.addColorStop(.5,'#3f9fb0');gr.addColorStop(1,'#237a8e')}
+  g.fillStyle=gr; g.fillRect(0,hz,W,H-hz);
+  g.strokeStyle='rgba(255,255,255,.35)'; g.lineCap='round';
+  for(let i=0;i<26;i++){ const k=hash(i+100), y=hz+6+(H*.5)*k*k, len=(10+40*k)*u, sp=river?(30+60*k):(4+8*k);
+    const x=((hash(i+130)*W*1.2+clock*sp)%(W*1.2))-W*.1+(river?0:Math.sin(clock+i)*6);
+    g.lineWidth=1+2.5*k; g.beginPath(); g.moveTo(x,y); g.lineTo(x+len,y); g.stroke(); }
+  if(!river){ // lekníny a rákos
+    for(let i=0;i<5;i++){ const x=W*(.04+.2*hash(i+200))+(i>2?W*.72:0), y=hz+H*(.08+.25*hash(i+210)), r=(8+10*hash(i+220))*u*(.5+(y-hz)/H);
+      g.fillStyle='#3d9a4c'; g.beginPath(); g.ellipse(x,y,r*1.6,r*.55,0,.3,6.6); g.lineTo(x,y); g.fill();
+      if(i%2===0){g.fillStyle='#ffd6e6'; g.beginPath(); g.arc(x+r*.4,y-r*.2,r*.35,0,7); g.fill()} }
+    for(let i=0;i<14;i++){ const left=i<7, x=(left?W*.005:W*.89)+hash(i+300)*W*.1, y=H*.9, h=H*(.22+.16*hash(i+310)), sw=Math.sin(clock*1.2+i)*6*u;
+      g.strokeStyle='#3e7d34'; g.lineWidth=3*u; g.beginPath(); g.moveTo(x,y); g.quadraticCurveTo(x+sw*.3,y-h*.5,x+sw,y-h); g.stroke();
+      if(i%2){g.fillStyle='#6b4423'; g.beginPath(); g.ellipse(x+sw*.85,y-h*.9,3*u,10*u,0,0,7); g.fill()} }
+  }else{ // kameny
+    for(let i=0;i<4;i++){ const x=W*(.05+.9*hash(i+400)), y=hz+H*(.1+.3*hash(i+410)), r=(7+9*hash(i+420))*u;
+      g.fillStyle='#8c8f8c'; g.beginPath(); g.ellipse(x,y,r*1.5,r*.7,0,3.14,6.28); g.fill();
+      g.strokeStyle='rgba(255,255,255,.6)'; g.lineWidth=2; g.beginPath(); g.ellipse(x,y,r*1.9,r*.3,0,.2,2.9); g.stroke(); }
+  }
+  if(F.active) drawFishing(u,hz);
+  // kapky
+  g.fillStyle='#fff'; for(const p of parts){ g.globalAlpha=clamp(p.l*2,0,1); g.beginPath(); g.arc(p.x,p.y,2.5*u,0,7); g.fill() } g.globalAlpha=1;
+  // přední břeh
+  g.fillStyle='#4f9a3f'; g.beginPath(); g.moveTo(0,H);
+  for(let x=0;x<=W;x+=24) g.lineTo(x,H*.93-Math.sin(x*.01)*H*.012);
+  g.lineTo(W,H); g.fill();
+  g.fillStyle='#3f8433'; for(let i=0;i<Math.ceil(W/22);i++){ const x=i*22+hash(i+500)*10; g.beginPath(); g.moveTo(x,H*.95); g.lineTo(x+3,H*.905); g.lineTo(x+7,H*.95); g.fill(); }
+  if(F.active){ if(save.method==='polozena') drawAlarm(u); drawRod(u); }
+}
+let tip={x:0,y:0};
+function drawFishing(u,hz){
+  const ph=F.phase;
+  // cíl – bublinky nad rybami
+  if(ph==='idle'||ph==='charge'||ph==='fly'){
+    const p=posAt(F.hot);
+    for(let i=0;i<3;i++){ const a=(clock*.6+i/3)%1; g.strokeStyle=`rgba(255,255,255,${.8*(1-a)})`; g.lineWidth=2.5*p.s;
+      g.beginPath(); g.ellipse(p.x,p.y,(8+34*a)*p.s,(3+11*a)*p.s,0,0,7); g.stroke(); }
+    for(let i=0;i<4;i++){ const a=(clock*.9+hash(i+7))%1; g.fillStyle=`rgba(255,255,255,${.9*(1-a)})`;
+      g.beginPath(); g.arc(p.x+(hash(i+3)-.5)*30*p.s,p.y-a*16*p.s,2.5*p.s,0,7); g.fill(); }
+  }
+  // poloha konce vlasce
+  let end=null, tension=.2;
+  if(ph==='charge'||ph==='idle'||ph==='fail'||ph==='card') end=null;
+  else if(ph==='fly'){ const k=F.t/.7, p=posAt(F.castD); end={x:lerp(W*.6,p.x,k),y:lerp(H*.3,p.y,k)-Math.sin(k*3.14)*H*.22,s:lerp(1,p.s,k),air:true} }
+  else if(ph==='fight'){ end=fishPos(); tension=F.T/100 }
+  else { const d=save.method==='privlac'?F.castD*F.lure:F.castD; end=posAt(d); tension=ph==='bite'?.8:.25 }
+  // stín ryby při zdolávání
+  if(ph==='fight'){
+    const f=F.fish, s=end.s*(20+50*f.t)*(SPEC[f.id].max>70?1.25:1);
+    const dir=Math.cos(clock*2.3)>0?1:-1;
+    g.fillStyle='rgba(10,45,60,.55)'; g.beginPath(); g.ellipse(end.x,end.y+4*end.s,s,s*.3,0,0,7); g.fill();
+    g.beginPath(); g.moveTo(end.x-dir*s*.8,end.y+4*end.s); g.lineTo(end.x-dir*s*1.4,end.y-s*.25); g.lineTo(end.x-dir*s*1.4,end.y+s*.4); g.fill();
+    if(F.lunge){ g.fillStyle='#fff'; g.strokeStyle=F.lunge.st==='warn'?'#ffc93c':'#e8502e'; g.lineWidth=5*u; g.font=`800 ${44*u}px sans-serif`; g.textAlign='center';
+      g.strokeText('!',end.x,end.y-26*u); g.fillStyle=F.lunge.st==='warn'?'#ffc93c':'#e8502e'; g.fillText('!',end.x,end.y-26*u); }
+    g.strokeStyle='rgba(255,255,255,.6)'; g.lineWidth=2; g.beginPath(); g.ellipse(end.x,end.y,s*1.2,s*.3,0,0,7); g.stroke();
+  }
+  // přívlač – nástraha a stín dravce
+  if(save.method==='privlac'&&(ph==='retrieve'||ph==='bite')){
+    const s=end.s;
+    if(F.attackAt!=null&&F.lure-F.attackAt<.22){ const k=clamp((F.lure-F.attackAt)/.22,0,1);
+      g.fillStyle='rgba(10,45,60,.5)'; g.beginPath(); g.ellipse(end.x-(30+90*k)*s,end.y+(6+18*k)*s,34*s,8*s,-.2,0,7); g.fill(); }
+    g.fillStyle=Math.sin(clock*18)>0?'#fff':'#ffd34d'; g.beginPath(); g.ellipse(end.x,end.y,7*s,3.5*s,Math.sin(clock*9)*.6,0,7); g.fill();
+    if(ph==='bite'){ g.strokeStyle='#fff'; g.lineWidth=3; for(let i=0;i<2;i++){const a=(F.t*1.6+i*.5)%1; g.globalAlpha=1-a; g.beginPath(); g.ellipse(end.x,end.y,(10+50*a)*s,(4+14*a)*s,0,0,7); g.stroke()} g.globalAlpha=1 }
+  }
+  // splávek
+  if(save.method==='splavek'&&(ph==='wait'||ph==='bite'||ph==='fly')){
+    const s=end.s*1.25; let dy=Math.sin(clock*2.2)*1.5*s;
+    if(ph==='wait'&&clock-F.nibT<.45) dy+=Math.sin((clock-F.nibT)/.45*3.14*2)*5*s+3*s;
+    const under=ph==='bite';
+    if(!end.air){ g.strokeStyle='rgba(255,255,255,.7)'; g.lineWidth=2;
+      const a=under?(F.t*1.8)%1:.5+.5*Math.sin(clock*2.2); g.beginPath(); g.ellipse(end.x,end.y,(12+(under?40*a:4*a))*s,(4+(under?12*a:1.5*a))*s,0,0,7); g.stroke(); }
+    if(under){ g.fillStyle='#e8502e'; g.fillRect(end.x-1.2*s,end.y-5*s,2.4*s,5*s); }
+    else{
+      const y=end.y+dy;
+      g.fillStyle='#f4f4f4'; g.beginPath(); g.ellipse(end.x,y-5*s,5*s,8*s,0,0,7); g.fill();
+      g.fillStyle='#e8502e'; g.beginPath(); g.ellipse(end.x,y-8*s,5*s,5.5*s,0,3.14,6.29); g.fill();
+      g.fillStyle='#ffd34d'; g.fillRect(end.x-1.2*s,y-24*s,2.4*s,12*s);
+      g.fillStyle='#e8502e'; g.beginPath(); g.arc(end.x,y-25*s,2.6*s,0,7); g.fill();
+      end={x:end.x,y:y-24*s,s:end.s};
+    }
+  }
+  if(save.method==='polozena'&&(ph==='wait'||ph==='bite')){
+    g.strokeStyle='rgba(255,255,255,.6)'; g.lineWidth=2; const a=ph==='bite'?(F.t*2)%1:.3; g.beginPath(); g.ellipse(end.x,end.y,(6+26*a)*end.s,(2+8*a)*end.s,0,0,7); g.stroke();
+  }
+  // špička prutu
+  const back=ph==='charge'?F.power:0, bend=ph==='fight'?tension:ph==='bite'?.5:0, fwd=ph==='fly'?Math.sin(clamp(F.t/.25,0,1)*3.14)*.5:0;
+  tip.x=W*(.60+.13*back-.05*fwd-.03*bend); tip.y=H*(.24-.05*back+.12*bend+.1*fwd);
+  drawRodLineEnd=end; drawRodTension=tension;
+}
+let drawRodLineEnd=null, drawRodTension=0;
+function drawRod(u){
+  const bx=W*.87, by=H*1.06, ph=F.phase;
+  if(ph==='idle'||ph==='fail'||ph==='card'||ph==='charge'){ if(ph!=='charge'){tip.x=W*.60;tip.y=H*.24} drawRodLineEnd=null }
+  const bend=ph==='fight'?drawRodTension:ph==='bite'?.5:0;
+  // vlasec
+  const e=drawRodLineEnd;
+  g.strokeStyle='rgba(255,255,255,.85)'; g.lineWidth=1.6;
+  if(e){ const sag=H*.07*(1-drawRodTension); g.beginPath(); g.moveTo(tip.x,tip.y); g.quadraticCurveTo((tip.x+e.x)/2,(tip.y+e.y)/2+sag,e.x,e.y); g.stroke(); }
+  else { g.beginPath(); g.moveTo(tip.x,tip.y); g.quadraticCurveTo(tip.x+8,tip.y+H*.2,tip.x-6*u+Math.sin(clock*1.5)*4,tip.y+H*.3); g.stroke();
+    g.fillStyle='#e8502e'; g.beginPath(); g.arc(tip.x-6*u+Math.sin(clock*1.5)*4,tip.y+H*.3,4*u,0,7); g.fill(); }
+  // prut
+  const cx=lerp(bx,tip.x,.55)+W*.05*bend, cy=lerp(by,tip.y,.55)-H*.06*bend;
+  const col=['#d9cba6','#3b6ea8','#2e8b57','#7a4a2a','#30343b','#c9a227'][save.rod];
+  g.lineCap='round';
+  g.strokeStyle='#1c1c1c'; g.lineWidth=11*u; g.beginPath(); g.moveTo(bx,by); g.lineTo(lerp(bx,cx,.35),lerp(by,cy,.35)); g.stroke();
+  g.strokeStyle=col; g.lineWidth=6.5*u; g.beginPath(); g.moveTo(lerp(bx,cx,.3),lerp(by,cy,.3)); g.quadraticCurveTo(cx,cy,lerp(cx,tip.x,.6),lerp(cy,tip.y,.6)); g.stroke();
+  g.lineWidth=3*u; g.beginPath(); g.moveTo(lerp(cx,tip.x,.55),lerp(cy,tip.y,.55)); g.lineTo(tip.x,tip.y); g.stroke();
+  // naviják
+  const rx=lerp(bx,cx,.42), ry=lerp(by,cy,.42)+10*u;
+  g.fillStyle=['#2a2d33','#d9483a','#3b6ea8'][save.reel]; g.beginPath(); g.arc(rx,ry,13*u,0,7); g.fill();
+  g.fillStyle='#d4a82a'; g.beginPath(); g.arc(rx,ry,6.5*u,0,7); g.fill();
+  const spin=(F.hold&&(ph==='fight'||ph==='retrieve'))?clock*14:0;
+  g.strokeStyle='#22272d'; g.lineWidth=3.5*u; g.beginPath(); g.moveTo(rx,ry); g.lineTo(rx+Math.cos(spin)*17*u,ry+Math.sin(spin)*17*u); g.stroke();
+  g.fillStyle='#22272d'; g.beginPath(); g.arc(rx+Math.cos(spin)*17*u,ry+Math.sin(spin)*17*u,4*u,0,7); g.fill();
+}
+function drawAlarm(u){
+  const x=W*.42, y=H*.9, on=F.phase==='bite'?Math.sin(clock*30)>-.3:(F.phase==='wait'&&clock-F.nibT<.2);
+  g.strokeStyle='#555'; g.lineWidth=4*u; g.beginPath(); g.moveTo(x,y+30*u); g.lineTo(x,y); g.stroke();
+  g.fillStyle='#22272d'; g.beginPath(); g.roundRect(x-16*u,y-26*u,32*u,30*u,6*u); g.fill();
+  g.fillStyle=on?'#ff3b30':'#5a1f1c'; g.beginPath(); g.arc(x,y-12*u,7*u,0,7); g.fill();
+  if(on){ g.fillStyle='rgba(255,59,48,.35)'; g.beginPath(); g.arc(x,y-12*u,18*u,0,7); g.fill(); }
+}
+/* ryba pro kartu úlovku a deník */
+function drawFish(c,id,x,y,L,sil){
+  const k=LOOK[id], Hh=L*k.h/2, nx=x-L/2, tx=x+L*.36, a=k.snout?.34:.1;
+  const body=()=>{ c.beginPath(); c.moveTo(nx,y+(k.snout?Hh*.15:0));
+    c.bezierCurveTo(nx+L*a,y-Hh*1.3,tx-L*.16,y-Hh*1.05,tx,y-Hh*.24); c.lineTo(tx,y+Hh*.24);
+    c.bezierCurveTo(tx-L*.16,y+Hh*1.05,nx+L*a,y+Hh*1.3,nx,y+(k.snout?Hh*.15:0)); c.closePath(); };
+  const fin=sil?'#0d3f63':k.fin; c.fillStyle=fin; c.lineJoin='round';
+  const th=Math.max(Hh*1.05,L*.11);
+  c.beginPath(); c.moveTo(tx-L*.02,y); c.lineTo(x+L/2,y-th); c.quadraticCurveTo(x+L*.42,y,x+L/2,y+th); c.closePath(); c.fill();
+  const dx=k.backfin?x+L*.16:x-L*.08, dw=k.backfin?L*.14:L*.2, top=y-Hh*(k.backfin?.78:.9);
+  c.beginPath();
+  if(k.spiky){ c.moveTo(dx-L*.06,top+Hh*.1); for(let i=0;i<5;i++){ c.lineTo(dx-L*.06+i*L*.045+L*.012,top-Hh*.75); c.lineTo(dx-L*.06+(i+1)*L*.045,top-Hh*.1); } c.lineTo(dx+L*.2,top+Hh*.3); }
+  else { c.moveTo(dx,top+Hh*.1); c.quadraticCurveTo(dx+dw*.25,top-Hh*.85,dx+dw*.65,top-Hh*.6); c.lineTo(dx+dw,top+Hh*.32); }
+  c.closePath(); c.fill();
+  c.beginPath(); c.moveTo(x-L*.02,y+Hh*.85); c.lineTo(x+L*.05,y+Hh*1.5); c.lineTo(x+L*.1,y+Hh*.8); c.closePath(); c.fill();
+  c.beginPath(); c.moveTo(x+L*.2,y+Hh*.6); c.lineTo(x+L*.26,y+Hh*(k.backfin?1.35:1.2)); c.lineTo(x+L*.31,y+Hh*.45); c.closePath(); c.fill();
+  if(sil){ c.fillStyle='#0d3f63'; body(); c.fill(); return }
+  const gr=c.createLinearGradient(0,y-Hh,0,y+Hh); gr.addColorStop(0,k.body); gr.addColorStop(.55,k.body); gr.addColorStop(1,k.belly);
+  c.fillStyle=gr; body(); c.fill();
+  c.save(); body(); c.clip();
+  if(k.stripes){ c.fillStyle='rgba(30,50,20,.55)'; for(let i=0;i<6;i++){ const sx=nx+L*(.2+i*.105); c.beginPath(); c.moveTo(sx,y-Hh*1.3); c.lineTo(sx+L*.035,y-Hh*1.3); c.lineTo(sx+L*.015,y+Hh*.35); c.closePath(); c.fill(); } }
+  if(k.spots){ c.fillStyle='rgba(235,240,190,.75)'; for(let i=0;i<26;i++){ c.beginPath(); c.ellipse(nx+L*(.2+hash(i+1)*.62),y+Hh*(hash(i+50)*1.3-.8),L*.018,L*.008,0,0,7); c.fill(); } }
+  if(k.scales){ c.strokeStyle='rgba(90,55,10,.4)'; c.lineWidth=Math.max(1,L*.005); for(let r=0;r<5;r++) for(let i=0;i<11;i++){ c.beginPath(); c.arc(nx+L*(.24+i*.055+(r%2)*.027),y-Hh*.75+r*Hh*.33,L*.03,-.9,.9); c.stroke(); } }
+  c.restore();
+  c.strokeStyle='rgba(0,0,0,.28)'; c.lineWidth=Math.max(1.5,L*.006); body(); c.stroke();
+  c.beginPath(); c.arc(nx+L*.17,y-Hh*.05,Hh*.75,-1.05,1.05); c.stroke();
+  c.fillStyle=fin; c.beginPath(); c.moveTo(nx+L*.22,y+Hh*.25); c.quadraticCurveTo(nx+L*.32,y+Hh*.9,nx+L*.2,y+Hh*.75); c.closePath(); c.fill();
+  const ex=nx+L*(k.snout?.13:.075), ey=y-Hh*.3, er=Math.max(L*.016,Hh*.14);
+  c.fillStyle=k.eye||'#f4e2a0'; c.beginPath(); c.arc(ex,ey,er,0,7); c.fill();
+  c.fillStyle='#111'; c.beginPath(); c.arc(ex,ey,er*.55,0,7); c.fill();
+  c.strokeStyle='rgba(0,0,0,.45)'; c.lineWidth=Math.max(1.5,L*.006); c.beginPath();
+  if(k.snout){ c.moveTo(nx+L*.005,y+Hh*.2); c.lineTo(nx+L*.11,y+Hh*.3); } else { c.moveTo(nx+L*.004,y+Hh*.12); c.lineTo(nx+L*.035,y+Hh*.2); }
+  c.stroke();
+  if(k.barbel){ c.beginPath(); c.moveTo(nx+L*.02,y+Hh*.2); c.quadraticCurveTo(nx+L*.01,y+Hh*.55,nx+L*.035,y+Hh*.6); c.stroke(); }
+}
+
+/* =====================================================================
+   HUD A OVLÁDÁNÍ PŘI LOVU
+   ===================================================================== */
+let lastHint='', lastBtn='';
+function updateHud(){
+  $('hudLvl').textContent=level(); $('hudXp').style.width=(xpFrac()*100)+'%'; $('hudCoins').textContent=save.coins;
+}
+function renderUi(){
+  if(!F.active) return;
+  const ph=F.phase, m=save.method; let hint='', cls='', btn='', bcls='';
+  const pull=F.lunge&&F.lunge.st==='pull', warn=F.lunge&&F.lunge.st==='warn';
+  if(ph==='idle'){hint='Podrž tlačítko a nahoď k bublinkám'; btn='NAHOĎ'}
+  else if(ph==='charge'){hint='Pusť, až bude ukazatel v zeleném!'; btn='PUSŤ!'}
+  else if(ph==='fly'){hint='Letí…'; btn='…'; bcls='dim'}
+  else if(ph==='wait'){hint=m==='splavek'?'Sleduj splávek. Zasekni, až zmizí pod vodou!':'Hlídej signalizátor. Zasekni, až začne pípat!'; btn='ČEKEJ'; bcls='dim'}
+  else if(ph==='retrieve'){hint='Drž tlačítko a veď nástrahu k sobě'; btn='VEĎ'}
+  else if(ph==='bite'){hint=m==='privlac'?'ÚTOK! Ťukni!':'ZÁBĚR! Ťukni!'; cls='alert'; btn='ZÁSEK!'; bcls='red'}
+  else if(ph==='fight'){
+    if(pull||warn){hint='Ryba táhne! PUSŤ tlačítko!'; cls='alert'}
+    else if(F.T>88){hint='Pozor, praskne! PUSŤ!'; cls='alert'}
+    else if(F.T<10){hint='Vlasec je volný. NAVÍJEJ!'; cls='alert'}
+    else hint='Drž a navíjej. V červeném pusť!';
+    btn='NAVÍJEJ'; bcls=(pull||warn)?'dim':'';
+  }
+  else if(ph==='card'){hint=''; btn='…'; bcls='dim'}
+  if(F.msg&&(ph==='fail'||flashT>0)&&ph!=='bite'&&!(ph==='fight'&&cls)){hint=F.msg; cls=F.msgGood?'good':(ph==='fail'?'':'')}
+  if(ph==='fail'){btn='…'; bcls='dim'}
+  const hk=hint+'|'+cls;
+  if(hk!==lastHint){ lastHint=hk; const h=$('hint'); h.textContent=hint; h.className=cls; h.style.display=hint?'':'none' }
+  const bk=btn+'|'+bcls;
+  if(bk!==lastBtn){ lastBtn=bk; const b=$('action'); b.textContent=btn; b.classList.remove('red','dim'); if(bcls) b.classList.add(bcls) }
+  const showCast=ph==='idle'||ph==='charge';
+  $('mCast').classList.toggle('hide',!showCast); $('mFight').classList.toggle('hide',ph!=='fight');
+  if(showCast){ $('castZone').style.left=clamp((F.hot-.12)*100,0,100)+'%'; $('castZone').style.width='24%'; $('castMark').style.left=(F.power*100)+'%' }
+  if(ph==='fight'){ $('tMark').style.left=F.T+'%'; $('distFill').style.width=(100-F.dist)+'%' }
+}
+
+/* =====================================================================
+   OBRAZOVKY (HTML)
+   ===================================================================== */
+let screen='menu', shopTab='rods';
+const scr=$('scr');
+function hideScreen(){scr.classList.remove('on'); scr.innerHTML=''; screen='fish'}
+function show(name){
+  screen=name; leaveFishing();
+  scr.innerHTML=VIEWS[name](); scr.classList.add('on'); scr.scrollTop=0;
+  if(name==='diary') scr.querySelectorAll('canvas[data-fish]').forEach(c=>{const id=c.dataset.fish; drawFish(c.getContext('2d'),id,150,60,cnt(save,id)?240:220,!cnt(save,id))});
+}
+const head=(t,back)=>`<div class="top"><button class="chip btn" data-act="go" data-to="${back||'menu'}">⬅️</button><h2>${t}</h2><span class="chip">🪙 ${save.coins}</span></div>`;
+const VIEWS={
+  menu(){ const l=level();
+    return `<div class="hero"><div><h1 class="logo">RYBÁŘ</h1>${isTobi()?'<div class="subt">Tobiášova rybářská hra</div>':''}</div></div>
+    <div class="hello">Ahoj, ${esc(voc())}! Ryby už čekají.</div>
+    <div class="status"><span class="chip">⭐ ${l} · ${TITLES[l]}<span class="xp"><i style="width:${xpFrac()*100}%"></i></span></span><span class="chip">🪙 ${save.coins}</span><span class="chip">🐟 ${save.stats.total}</span></div>
+    <div class="menu">
+      <button class="big go" data-act="go" data-to="map">🎣 Na ryby!</button>
+      <button class="big" data-act="go" data-to="shop">🛒 Obchod</button>
+      <button class="big" data-act="go" data-to="diary">📖 Deník</button>
+      <button class="big" data-act="go" data-to="tasks">🏆 Výzvy</button>
+      <button class="big" data-act="go" data-to="settings">⚙️ Nastavení</button>
+    </div>`; },
+  map(){ const l=level();
+    return head('Kam půjdeme?')+`<div class="wrap grid">`+Object.keys(REVIR).map(id=>{const r=REVIR[id], lock=l<r.lvl;
+      return `<div class="card ${lock?'lock':''}"><div class="ico">${lock?'🔒':r.ico}</div><h3>${r.n}</h3><p>${r.txt}</p>
+        ${lock?`<p class="stat">Odemkne se na úrovni ${r.lvl}.</p>`:`<button class="big go" data-act="revir" data-id="${id}">Jdeme!</button>`}</div>`}).join('')+`</div>`; },
+  prep(){ const l=level(), rv=REVIR[save.revir]; fixLoadout();
+    const ms=rv.methods.map(id=>{const m=METHOD[id], lock=l<m.lvl;
+      return `<button class="card ${lock?'lock':''} ${save.method===id?'sel':''}" ${lock?'disabled':''} data-act="method" data-id="${id}" style="text-align:left">
+        <div class="ico">${lock?'🔒':m.ico}</div><h3>${m.n}</h3><p>${lock?'Odemkne se na úrovni '+m.lvl+'.':m.txt}</p></button>`}).join('');
+    const bs=METHOD[save.method].baits.map(id=>{const b=BAIT[id], own=save.baits.includes(id);
+      const likes=Object.keys(b.aff).filter(f=>rv.fish[f]&&b.aff[f]>=2).map(f=>cnt(save,f)?SPEC[f].s:'???').join(', ');
+      return `<button class="card ${own?'':'lock'} ${save.bait===id?'sel':''}" ${own?'':'disabled'} data-act="bait" data-id="${id}" style="text-align:left">
+        <div class="ico">${b.ico}</div><h3>${b.n}</h3><p>${own?(likes?'Chutná: '+likes:'Tady moc nezabírá.'):'Kup v obchodě za '+b.price+' 🪙'}</p></button>`}).join('');
+    return head(rv.n,'map')+`<div class="wrap"><div class="sub">Jak budeš chytat?</div><div class="grid">${ms}</div>
+      <div class="sub">Co dáš na háček?</div><div class="grid">${bs}</div>
+      <div style="margin-top:18px"><button class="big go" data-act="start" style="width:100%;min-height:70px;font-size:26px">🎣 Jdu chytat!</button></div></div>`; },
+  shop(){
+    const tabs=[['rods','🎣 Pruty'],['reels','⚙️ Navijáky'],['lines','🧵 Vlasce'],['baits','🪱 Nástrahy']];
+    let items='';
+    const eqBtn=(own,eq,price,act,i)=>eq?'<p class="stat">✅ Používáš</p>':own?`<button class="big" data-act="${act}" data-i="${i}">Použít</button>`:
+      `<button class="big sun" data-act="${act}" data-i="${i}" ${save.coins<price?'disabled':''}>Koupit za ${price} 🪙</button>`;
+    if(shopTab==='rods') items=RODS.map((r,i)=>`<div class="card"><div class="ico">🎣</div><h3>${r.n}</h3><p>Síla: ${'💪'.repeat(i+1)}</p><p>${i?'Utáhne větší ryby.':'Světlý prut s černozlatým navijákem, jako ten opravdový.'}</p>${eqBtn(save.rods.includes(i),save.rod===i,r.price,'rod',i)}</div>`).join('');
+    if(shopTab==='reels') items=REELS.map((r,i)=>`<div class="card"><div class="ico">⚙️</div><h3>${r.n}</h3><p>Rychlost: ${'⚡'.repeat(i+1)}</p><p>${i?'Rybu přitáhneš rychleji.':'Pomalý, ale spolehlivý.'}</p>${eqBtn(save.reels.includes(i),save.reel===i,r.price,'reel',i)}</div>`).join('');
+    if(shopTab==='lines') items=LINES.map((r,i)=>`<div class="card"><div class="ico">🧵</div><h3>${r.n}</h3><p>Pevnost: ${'🛡️'.repeat(i+1)}</p><p>${i?'Hned tak nepraskne.':'Na menší ryby stačí.'}</p>${eqBtn(save.lines.includes(i),save.line===i,r.price,'line',i)}</div>`).join('');
+    if(shopTab==='baits') items=BAITS.map(id=>{const b=BAIT[id], own=save.baits.includes(id);
+      const m=Object.keys(METHOD).filter(k=>METHOD[k].baits.includes(id)).map(k=>METHOD[k].n).join(', ');
+      return `<div class="card"><div class="ico">${b.ico}</div><h3>${b.n}</h3><p>Metoda: ${m}</p><p>Chutná: ${Object.keys(b.aff).filter(f=>b.aff[f]>=2).map(f=>SPEC[f].s).join(', ')}</p>
+        ${own?'<p class="stat">✅ Máš</p>':`<button class="big sun" data-act="buybait" data-id="${id}" ${save.coins<b.price?'disabled':''}>Koupit za ${b.price} 🪙</button>`}</div>`}).join('');
+    return head('Obchod')+`<div class="wrap"><div class="tabs">${tabs.map(t=>`<button class="${shopTab===t[0]?'on':''}" data-act="tab" data-id="${t[0]}">${t[1]}</button>`).join('')}</div><div class="grid">${items}</div>
+      <p class="note">Mince získáš jen chytáním ryb a plněním výzev. Ve hře se nic nekupuje za opravdové peníze.</p></div>`; },
+  diary(){
+    return head(isTobi()?'Tobiášův deník':'Rybářský deník')+`<div class="wrap"><div class="grid">`+ORDER.map(id=>{const d=save.diary[id], sp=SPEC[id];
+      return `<div class="card"><canvas data-fish="${id}" width="300" height="120"></canvas><h3>${d?sp.n:'???'}</h3>
+        ${d?`<p class="stat">Uloveno: ${d.n}× · rekord ${num(d.maxL,1)} cm · ${num(d.maxW,2)} kg</p><p>${sp.info}</p>`:'<p>Tuhle rybu jsi ve hře ještě nechytil.</p>'}</div>`}).join('')+`</div>
+      <p class="note">Opravdové lovné míry, doby hájení a další pravidla se liší podle revíru a mění se. Před rybařením si je vždy ověř v rybářském řádu a v povolence.</p></div>`; },
+  tasks(){
+    return head('Výzvy')+`<div class="wrap grid">`+TASKS.map(t=>{const done=save.done.includes(t.id), v=Math.min(t.val(save),t.goal);
+      return `<div class="card"><h3>${done?'✅':'🎯'} ${t.txt}</h3><p class="stat">${done?'Splněno!':`${String(v).replace('.',',')}${t.unit||''} z ${t.goal}${t.unit||''}`} · odměna ${t.coins} 🪙</p>
+        <div class="prog"><i style="width:${done?100:clamp(v/t.goal*100,0,100)}%"></i></div></div>`}).join('')+`</div>`; },
+  settings(){
+    return head('Nastavení')+`<div class="wrap" style="max-width:460px;display:flex;flex-direction:column;gap:12px">
+      <div class="card"><h3>Jméno rybáře</h3><input type="text" id="nameIn" maxlength="16" value="${esc(save.name)}" placeholder="Tvoje jméno"><button class="big go" data-act="savename">Uložit jméno</button></div>
+      <button class="big" data-act="sound">${save.sound?'🔊 Zvuk: zapnutý':'🔇 Zvuk: vypnutý'}</button>
+      <button class="big" data-act="music">${save.music?'🎵 Hudba: zapnutá':'🎵 Hudba: vypnutá'}</button>
+      <button class="big" data-act="vib">${save.vib?'📳 Vibrace: zapnuté':'📴 Vibrace: vypnuté'}</button>
+      <button class="big" data-act="help">❓ Jak se hraje</button>
+      <button class="big" data-act="reset" style="background:#f3c7bd">🗑️ Začít úplně znovu</button>
+      <p class="note">Postup se ukládá sám do tohoto zařízení a prohlížeče. Hra nepotřebuje účet ani internet.</p></div>`; }
+};
+function fixLoadout(){
+  const rv=REVIR[save.revir], l=level();
+  if(!rv.methods.includes(save.method)||l<METHOD[save.method].lvl) save.method=rv.methods.find(m=>l>=METHOD[m].lvl)||rv.methods[0];
+  const ok=METHOD[save.method].baits.filter(b=>save.baits.includes(b));
+  if(!ok.includes(save.bait)) save.bait=ok[0]||METHOD[save.method].baits[0];
+}
+function canFish(){return METHOD[save.method].baits.includes(save.bait)&&save.baits.includes(save.bait)}
+
+function showDialog(html){$('dlgBox').innerHTML=html; $('dlg').classList.add('on'); $('dlg').scrollTop=0}
+function closeDialog(){$('dlg').classList.remove('on'); $('dlgBox').innerHTML=''}
+let toastTimer=0;
+function toast(t){const e=$('toast'); e.textContent=t; e.classList.remove('on'); void e.offsetWidth; e.classList.add('on'); SND.coin(); clearTimeout(toastTimer); toastTimer=setTimeout(()=>e.classList.remove('on'),2400)}
+const HELP=`<h2>Jak se hraje</h2>
+  <p>1. <b>Podrž</b> zelené tlačítko a <b>pusť</b>, až bude ukazatel v zeleném. Nahodíš k bublinkám.</p>
+  <p>2. <b>Čekej</b> na záběr. Když splávek zmizí pod vodou, rychle <b>ťukni</b>.</p>
+  <p>3. <b>Drž</b> tlačítko a navíjej. Když ryba táhne nebo je napětí v červeném, <b>pusť</b>.</p>
+  <p>4. Za ryby dostaneš ⭐ a 🪙 na lepší vybavení.</p>
+  <div class="row"><button class="big go" data-act="dlgok">Jdu na to!</button></div>`;
+
+document.addEventListener('pointerdown',()=>{ if(save.music||save.sound) audio() },true);
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-act]'); if(!b||b.disabled) return;
+  const a=b.dataset.act, id=b.dataset.id, i=+b.dataset.i; SND.click();
+  const buy=(list,own,key)=>{ if(save[own].includes(i)) save[key]=i; else if(save.coins>=list[i].price){save.coins-=list[i].price; save[own].push(i); save[key]=i; SND.coin()} persist(); show('shop') };
+  switch(a){
+    case 'go': show(b.dataset.to); break;
+    case 'home': show('menu'); break;
+    case 'prep': show('prep'); break;
+    case 'revir': save.revir=id; fixLoadout(); persist(); show('prep'); break;
+    case 'method': save.method=id; fixLoadout(); persist(); show('prep'); break;
+    case 'bait': save.bait=id; persist(); show('prep'); break;
+    case 'start': fixLoadout(); if(canFish()){persist(); enterFishing()} else toast('Na tuhle metodu nemáš nástrahu. Kup ji v obchodě.'); break;
+    case 'tab': shopTab=id; show('shop'); break;
+    case 'rod': buy(RODS,'rods','rod'); break;
+    case 'reel': buy(REELS,'reels','reel'); break;
+    case 'line': buy(LINES,'lines','line'); break;
+    case 'buybait': if(!save.baits.includes(id)&&save.coins>=BAIT[id].price){save.coins-=BAIT[id].price; save.baits.push(id); SND.coin(); persist()} show('shop'); break;
+    case 'release': finishCatch(true); break;
+    case 'keep': finishCatch(false); break;
+    case 'dlgok': closeDialog(); break;
+    case 'savename': save.name=($('nameIn').value||'').trim().slice(0,16)||'Tobiáš'; persist(); toast('Uloženo!'); break;
+    case 'welcome': save.seen=true; persist(); showDialog(HELP); break;
+    case 'sound': save.sound=!save.sound; persist(); show('settings'); break;
+    case 'music': save.music=!save.music; if(save.music) audio(); persist(); show('settings'); break;
+    case 'vib': save.vib=!save.vib; persist(); show('settings'); break;
+    case 'help': showDialog(HELP); break;
+    case 'reset': showDialog(`<h2>Opravdu začít znovu?</h2><p>Smažou se všechny ryby, mince i vybavení.</p><div class="row"><button class="big" data-act="dlgok">Ne, nechat</button><button class="big" data-act="reset2" style="background:#f3c7bd">Ano, smazat</button></div>`); break;
+    case 'reset2': { const n=save.name, mu=save.music, so=save.sound, vi=save.vib; save=freshSave(); save.name=n; save.music=mu; save.sound=so; save.vib=vi; save.seen=true; persist(); closeDialog(); show('menu'); break }
+  }
+});
+
+/* ovládání lovu: tlačítko i dotyk do scény */
+const act=$('action');
+function down(e){ e.preventDefault(); if($('dlg').classList.contains('on')) return; press() }
+act.addEventListener('pointerdown',down); cv.addEventListener('pointerdown',down);
+['pointerup','pointercancel'].forEach(n=>window.addEventListener(n,()=>{ if(F.hold) release() }));
+window.addEventListener('blur',()=>{ if(F.hold) release() });
+document.addEventListener('visibilitychange',()=>{ if(document.hidden&&F.hold) release() });
+document.addEventListener('contextmenu',e=>e.preventDefault());
+window.addEventListener('keydown',e=>{ if(e.code==='Space'&&!e.repeat&&F.active&&document.activeElement.tagName!=='INPUT'){e.preventDefault();press()} });
+window.addEventListener('keyup',e=>{ if(e.code==='Space'&&F.hold) release() });
+window.addEventListener('resize',resize);
+
+/* =====================================================================
+   SMYČKA
+   ===================================================================== */
+let last=0;
+function frame(ts){
+  const dt=Math.min(.05,(ts-last)/1000||0); last=ts;
+  update(dt); drawScene(); renderUi();
+  requestAnimationFrame(frame);
+}
+F.nibT=-9;
+resize(); fixLoadout();
+if(level()<REVIR[save.revir].lvl) save.revir='rybnik';
+show('menu');
+if(!save.seen){
+  showDialog(`<h2>Ahoj, ${esc(voc())}!</h2>
+    <p>Tohle je <b>tvoje rybářská hra</b>. Vezmi prut a pojď k vodě!</p>
+    <div class="row"><button class="big go" data-act="welcome">Jdeme na ryby!</button></div>`);
+}
+requestAnimationFrame(frame);
+window.__game={F,press,release,update,get save(){return save},show,enterFishing,finishCatch,SPEC,pickFish,fishPos,posAt};
+</script>
+</body>
+</html>
